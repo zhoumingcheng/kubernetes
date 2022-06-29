@@ -120,20 +120,21 @@ func TestCloneSelectorAndAddLabel(t *testing.T) {
 	}
 
 	cases := []struct {
-		labels     map[string]string
-		labelKey   string
-		labelValue string
-		want       map[string]string
+		labels           map[string]string
+		labelKey         string
+		labelValue       string
+		matchExpressions []metav1.LabelSelectorRequirement
+		wantMatchLabels  map[string]string
 	}{
 		{
-			labels: labels,
-			want:   labels,
+			labels:          labels,
+			wantMatchLabels: labels,
 		},
 		{
 			labels:     labels,
 			labelKey:   "foo4",
 			labelValue: "89",
-			want: map[string]string{
+			wantMatchLabels: map[string]string{
 				"foo1": "bar1",
 				"foo2": "bar2",
 				"foo3": "bar3",
@@ -144,19 +145,55 @@ func TestCloneSelectorAndAddLabel(t *testing.T) {
 			labels:     nil,
 			labelKey:   "foo4",
 			labelValue: "12",
-			want: map[string]string{
+			wantMatchLabels: map[string]string{
 				"foo4": "12",
+			},
+		},
+		{
+			labels:     labels,
+			labelKey:   "foo4",
+			labelValue: "89",
+			matchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      "tier",
+					Operator: "In",
+					Values:   []string{"cache"},
+				},
+			},
+			wantMatchLabels: map[string]string{
+				"foo1": "bar1",
+				"foo2": "bar2",
+				"foo3": "bar3",
+				"foo4": "89",
+			},
+		},
+		{
+			labels:     labels,
+			labelKey:   "foo4",
+			labelValue: "89",
+			matchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      "tier",
+					Operator: "In",
+					Values:   nil,
+				},
+			},
+			wantMatchLabels: map[string]string{
+				"foo1": "bar1",
+				"foo2": "bar2",
+				"foo3": "bar3",
+				"foo4": "89",
 			},
 		},
 	}
 
 	for _, tc := range cases {
-		ls_in := metav1.LabelSelector{MatchLabels: tc.labels}
-		ls_out := metav1.LabelSelector{MatchLabels: tc.want}
+		ls_in := metav1.LabelSelector{MatchLabels: tc.labels, MatchExpressions: tc.matchExpressions}
+		ls_out := metav1.LabelSelector{MatchLabels: tc.wantMatchLabels, MatchExpressions: tc.matchExpressions}
 
 		got := CloneSelectorAndAddLabel(&ls_in, tc.labelKey, tc.labelValue)
 		if !reflect.DeepEqual(got, &ls_out) {
-			t.Errorf("got %v, want %v", got, tc.want)
+			t.Errorf("got %v, want %v", got, ls_out)
 		}
 	}
 }
@@ -207,5 +244,42 @@ func TestAddLabelToSelector(t *testing.T) {
 		if !reflect.DeepEqual(got, &ls_out) {
 			t.Errorf("got %v, want %v", got, tc.want)
 		}
+	}
+}
+
+func TestSelectorHasLabel(t *testing.T) {
+	cases := []struct {
+		name     string
+		selector *metav1.LabelSelector
+		labelKey string
+		want     bool
+	}{
+		{
+			name: "return true",
+			selector: &metav1.LabelSelector{
+				MatchLabels:      map[string]string{"a": "b"},
+				MatchExpressions: nil,
+			},
+			labelKey: "a",
+			want:     true,
+		},
+		{
+			name: "return false",
+			selector: &metav1.LabelSelector{
+				MatchLabels:      map[string]string{"a": "b"},
+				MatchExpressions: nil,
+			},
+			labelKey: "b",
+			want:     false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := SelectorHasLabel(tc.selector, tc.labelKey)
+			if got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
