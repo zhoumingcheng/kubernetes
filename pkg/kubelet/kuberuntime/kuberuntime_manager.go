@@ -760,14 +760,17 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 	} else {
 		// Step 3: kill any running containers in this pod which are not to keep.
 		for containerID, containerInfo := range podContainerChanges.ContainersToKill {
+			DeleteContainersChan <- struct{}{}
 			klog.V(3).InfoS("Killing unwanted container for pod", "containerName", containerInfo.name, "containerID", containerID, "pod", klog.KObj(pod))
 			killContainerResult := kubecontainer.NewSyncResult(kubecontainer.KillContainer, containerInfo.name)
 			result.AddSyncResult(killContainerResult)
 			if err := m.killContainer(pod, containerID, containerInfo.name, containerInfo.message, containerInfo.reason, nil); err != nil {
 				killContainerResult.Fail(kubecontainer.ErrKillContainer, err.Error())
 				klog.ErrorS(err, "killContainer for pod failed", "containerName", containerInfo.name, "containerID", containerID, "pod", klog.KObj(pod))
+				<-DeleteContainersChan
 				return
 			}
+			<-DeleteContainersChan
 		}
 	}
 
@@ -927,10 +930,32 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 
 	// Step 7: start containers in podContainerChanges.ContainersToStart.
 	for _, idx := range podContainerChanges.ContainersToStart {
+		CreateContainersChan <- struct{}{}
 		start("container", metrics.Container, containerStartSpec(&pod.Spec.Containers[idx]))
+		time.Sleep(time.Second * time.Duration(CreateContainersIntervalTime))
+		<-CreateContainersChan
 	}
 
 	return
+}
+
+const (
+	DefaultCreateContainersLimit    = 10
+	DefaultCreateContainersInterval = 10
+	DefaultDeleteContainersLimit    = 10
+)
+
+var (
+	CreateContainersIntervalTime int64
+	CreateContainersLimit        int32
+	CreateContainersChan         chan struct{}
+	DeleteContainersLimit        int32
+	DeleteContainersChan         chan struct{}
+)
+
+func InitSyncContainersChan() {
+	CreateContainersChan = make(chan struct{}, CreateContainersLimit)
+	DeleteContainersChan = make(chan struct{}, DeleteContainersLimit)
 }
 
 // If a container is still in backoff, the function will return a brief backoff error and

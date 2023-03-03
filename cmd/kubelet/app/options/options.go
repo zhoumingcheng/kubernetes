@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+	"k8s.io/kubernetes/pkg/kubelet/kuberuntime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -552,4 +553,7 @@ func AddKubeletConfigFlags(mainfs *pflag.FlagSet, c *kubeletconfig.KubeletConfig
 	// Memory Manager Flags
 	fs.StringVar(&c.MemoryManagerPolicy, "memory-manager-policy", c.MemoryManagerPolicy, "Memory Manager policy to use. Possible values: 'None', 'Static'.")
 	fs.Var(&utilflag.ReservedMemoryVar{Value: &c.ReservedMemory}, "reserved-memory", "A comma separated list of memory reservations for NUMA nodes. (e.g. --reserved-memory 0:memory=1Gi,hugepages-1M=2Gi --reserved-memory 1:memory=2Gi). The total sum for each memory type should be equal to the sum of kube-reserved, system-reserved and eviction-threshold. See https://kubernetes.io/docs/tasks/administer-cluster/memory-manager/#reserved-memory-flag for more details.")
+	fs.Int32Var(&kuberuntime.CreateContainersLimit, "create-containers-limit", kuberuntime.DefaultCreateContainersLimit, "Limit the number of createContainers goroutines. e.g. --create-containers-limit=10")
+	fs.Int64Var(&kuberuntime.CreateContainersIntervalTime, "create-containers-interval", kuberuntime.DefaultCreateContainersInterval, "create the containers of interval seconds. e.g. --create-containers-interval=0")
+	fs.Int32Var(&kuberuntime.DeleteContainersLimit, "delete-containers-limit", kuberuntime.DefaultDeleteContainersLimit, "Limit the number of deleteContainers goroutines. e.g. --delete-containers-limit=10")
 }
